@@ -25,6 +25,7 @@ import io.flutter.FlutterInjector;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.embedding.engine.FlutterEngineCache;
 import io.flutter.embedding.engine.FlutterEngineGroup;
+import io.flutter.embedding.engine.FlutterEngineGroupCache;
 import io.flutter.embedding.engine.dart.DartExecutor;
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.activity.ActivityAware;
@@ -133,17 +134,19 @@ public class FlutterAccessibilityServicePlugin implements FlutterPlugin, Activit
                 return;
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                String id = call.argument("id");
                 Boolean clickableThrough = call.argument("clickableThrough");
                 Integer width = call.argument("width");
                 Integer height = call.argument("height");
                 Integer gravity = call.argument("gravity");
-                AccessibilityListener.showOverlay(width, height, gravity, clickableThrough);
+                AccessibilityListener.showOverlay(id, width, height, gravity, clickableThrough);
                 result.success(true);
             } else {
                 result.success(false);
             }
         } else if (call.method.equals("hideOverlayWindow")) {
-            AccessibilityListener.removeOverlay();
+            String id = call.argument("id");
+            AccessibilityListener.removeOverlay(id);
             result.success(true);
         } else {
             result.notImplemented();
@@ -209,11 +212,12 @@ public class FlutterAccessibilityServicePlugin implements FlutterPlugin, Activit
         binding.addActivityResultListener(this);
         try {
             FlutterEngineGroup enn = new FlutterEngineGroup(context);
-            DartExecutor.DartEntrypoint dEntry = new DartExecutor.DartEntrypoint(
-                    FlutterInjector.instance().flutterLoader().findAppBundlePath(),
-                    "accessibilityOverlay");
-            FlutterEngine engine = enn.createAndRunEngine(context, dEntry);
-            FlutterEngineCache.getInstance().put(CACHED_TAG, engine);
+            FlutterEngineGroupCache.getInstance().put(CACHED_TAG, enn);
+//            DartExecutor.DartEntrypoint dEntry = new DartExecutor.DartEntrypoint(
+//                    FlutterInjector.instance().flutterLoader().findAppBundlePath(),
+//                    "accessibilityOverlay");
+//            FlutterEngine engine = enn.createAndRunEngine(context, dEntry);
+//            FlutterEngineCache.getInstance().put(CACHED_TAG, engine);
             supportOverlay = true;
         } catch (Exception exception) {
             supportOverlay = false;

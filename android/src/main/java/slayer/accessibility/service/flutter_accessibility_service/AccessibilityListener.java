@@ -5,6 +5,7 @@ import static slayer.accessibility.service.flutter_accessibility_service.Flutter
 
 import android.accessibilityservice.AccessibilityService;
 import android.annotation.TargetApi;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -28,23 +29,32 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+import io.flutter.FlutterInjector;
 import io.flutter.embedding.android.FlutterTextureView;
 import io.flutter.embedding.android.FlutterView;
+import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.embedding.engine.FlutterEngineCache;
+import io.flutter.embedding.engine.FlutterEngineGroup;
+import io.flutter.embedding.engine.FlutterEngineGroupCache;
+import io.flutter.embedding.engine.dart.DartExecutor;
 
 
 public class AccessibilityListener extends AccessibilityService {
     private static WindowManager mWindowManager;
-    private static FlutterView mOverlayView;
-    static private boolean isOverlayShown = false;
+    //    private static FlutterView mOverlayView;
+    private static Map<String, FlutterView> mOverlayViews = new HashMap<>();
+    //static private boolean isOverlayShown = false;
+    static private Map<String, Boolean> isOverlayShowns = new HashMap<>();
     private static final int CACHE_SIZE = 4 * 1024 * 1024; // 4Mib
     private static final int maxDepth = 20;
     private static LruCache<String, AccessibilityNodeInfo> nodeMap =
             new LruCache<>(CACHE_SIZE);
     private static final int DEFAULT_MAX_TREE_DEPTH = 15;
     private int maximumTreeDepth = DEFAULT_MAX_TREE_DEPTH;
+    private static Context applicationContext;
 
     public static AccessibilityNodeInfo getNodeInfo(String id) {
         return nodeMap.get(id);
@@ -200,39 +210,72 @@ public class AccessibilityListener extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        mOverlayView = new FlutterView(getApplicationContext(), new FlutterTextureView(getApplicationContext()));
-        mOverlayView.attachToFlutterEngine(FlutterEngineCache.getInstance().get(CACHED_TAG));
+        applicationContext = getApplicationContext();
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP_MR1)
+    static public void showOverlay(String id, int width, int height, int gravity, boolean clickableThrough) {
+        if (Boolean.TRUE.equals(isOverlayShowns.get(id))) {
+            return;
+        }
+        isOverlayShowns.put(id, true);
+
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams();
+        lp.type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY;
+        lp.format = PixelFormat.TRANSLUCENT;
+        lp.width = width;
+        lp.height = height;
+        if (!clickableThrough) {
+            lp.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        } else {
+            lp.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN;
+        }
+        lp.gravity = gravity;
+
+        FlutterEngine engine = FlutterEngineCache.getInstance().get(CACHED_TAG + "_" + id);
+        if (null == engine) {
+            DartExecutor.DartEntrypoint dEntry = new DartExecutor.DartEntrypoint(
+                    FlutterInjector.instance().flutterLoader().findAppBundlePath(),
+                    "accessibilityOverlay" + id);
+            FlutterEngineGroup enn = FlutterEngineGroupCache.getInstance().get(CACHED_TAG);
+            engine = enn.createAndRunEngine(applicationContext, dEntry);
+            FlutterEngineCache.getInstance().put(CACHED_TAG + "_" + id, engine);
+        }
+
+        FlutterView mOverlayView = new FlutterView(applicationContext, new FlutterTextureView(applicationContext));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            mOverlayView.attachToFlutterEngine(engine);
+        }
         mOverlayView.setFitsSystemWindows(true);
         mOverlayView.setFocusable(true);
         mOverlayView.setFocusableInTouchMode(true);
         mOverlayView.setBackgroundColor(Color.TRANSPARENT);
+        mOverlayViews.put(id, mOverlayView);
+
+        mWindowManager.addView(mOverlayView, lp);
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP_MR1)
-    static public void showOverlay(int width, int height, int gravity, boolean clickableThrough) {
-        if (!isOverlayShown) {
-            WindowManager.LayoutParams lp = new WindowManager.LayoutParams();
-            lp.type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY;
-            lp.format = PixelFormat.TRANSLUCENT;
-            lp.width = width;
-            lp.height = height;
-            if (!clickableThrough) {
-                lp.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
-            } else {
-                lp.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN;
+    static public void removeOverlay(String id) {
+        if (Boolean.TRUE.equals(isOverlayShowns.get(id))) {
+            FlutterView mOverlayView = mOverlayViews.get(id);
+            if (null != mOverlayView) {
+                mWindowManager.removeView(mOverlayView);
             }
-            lp.gravity = gravity;
-            mWindowManager.addView(mOverlayView, lp);
-            isOverlayShown = true;
+            isOverlayShowns.remove(id);
         }
     }
 
     static public void removeOverlay() {
-        if (isOverlayShown) {
-            mWindowManager.removeView(mOverlayView);
-            isOverlayShown = false;
+        for (String key : isOverlayShowns.keySet()) {
+            FlutterView mOverlayView = mOverlayViews.get(key);
+            if (null != mOverlayView) {
+                mWindowManager.removeView(mOverlayView);
+            }
+            FlutterEngineCache.getInstance().remove(CACHED_TAG + "_" + key);
         }
+        isOverlayShowns.clear();
+        mOverlayViews.clear();
     }
 
     @Override

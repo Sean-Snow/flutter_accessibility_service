@@ -12,10 +12,12 @@ import 'config/overlay_config.dart';
 class FlutterAccessibilityService {
   FlutterAccessibilityService._();
 
-  static const MethodChannel _methodChannel =
-      MethodChannel('x-slayer/accessibility_channel');
-  static const EventChannel _eventChannel =
-      EventChannel('x-slayer/accessibility_event');
+  static const MethodChannel _methodChannel = MethodChannel(
+    'x-slayer/accessibility_channel',
+  );
+  static const EventChannel _eventChannel = EventChannel(
+    'x-slayer/accessibility_event',
+  );
   static Stream<AccessibilityEvent>? _stream;
 
   /// stream the incoming Accessibility events
@@ -34,8 +36,9 @@ class FlutterAccessibilityService {
   /// it will open the accessibility settings page and return `true` once the permission granted.
   static Future<bool> requestAccessibilityPermission() async {
     try {
-      return await _methodChannel
-          .invokeMethod('requestAccessibilityPermission');
+      return await _methodChannel.invokeMethod(
+        'requestAccessibilityPermission',
+      );
     } on PlatformException catch (error) {
       log("$error");
       return Future.value(false);
@@ -45,8 +48,9 @@ class FlutterAccessibilityService {
   /// check if accessibility permission is enabled
   static Future<bool> isAccessibilityPermissionEnabled() async {
     try {
-      return await _methodChannel
-          .invokeMethod('isAccessibilityPermissionEnabled');
+      return await _methodChannel.invokeMethod(
+        'isAccessibilityPermissionEnabled',
+      );
     } on PlatformException catch (error) {
       log("$error");
       return false;
@@ -63,14 +67,11 @@ class FlutterAccessibilityService {
   ]) async {
     try {
       if (action == NodeAction.unknown) return false;
-      return await _methodChannel.invokeMethod<bool?>(
-            'performActionById',
-            {
-              "nodeId": event.mapId,
-              "nodeAction": action.id,
-              "extras": arguments,
-            },
-          ) ??
+      return await _methodChannel.invokeMethod<bool?>('performActionById', {
+            "nodeId": event.mapId,
+            "nodeAction": action.id,
+            "extras": arguments,
+          }) ??
           false;
     } on PlatformException catch (error) {
       log("$error");
@@ -94,13 +95,16 @@ class FlutterAccessibilityService {
   ///   );
   /// }
   /// ```
-  static Future<bool> showOverlayWindow([
+  static Future<bool> showOverlayWindow({
+    String id = "Default",
     OverlayConfig config = const OverlayConfig(),
-  ]) async {
+  }) async {
     try {
+      final args = config.toJson();
+      args["id"] = id;
       return await _methodChannel.invokeMethod<bool?>(
             'showOverlayWindow',
-            config.toJson(),
+            args,
           ) ??
           false;
     } on PlatformException catch (error) {
@@ -110,9 +114,10 @@ class FlutterAccessibilityService {
   }
 
   /// Hide the overlay window
-  static Future<bool> hideOverlayWindow() async {
+  static Future<bool> hideOverlayWindow({String id = "Default"}) async {
     try {
-      return await _methodChannel.invokeMethod<bool?>('hideOverlayWindow') ??
+      return await _methodChannel
+              .invokeMethod<bool?>('hideOverlayWindow', {"id": id}) ??
           false;
     } on PlatformException catch (error) {
       log("$error");
@@ -124,8 +129,9 @@ class FlutterAccessibilityService {
   /// System actions that correspond to the `GlobalAction`
   static Future<List<GlobalAction>> getSystemActions() async {
     try {
-      final _list = await _methodChannel
-              .invokeMethod<List<dynamic>>('getSystemActions') ??
+      final _list = await _methodChannel.invokeMethod<List<dynamic>>(
+            'getSystemActions',
+          ) ??
           [];
       return _list
           .map(
@@ -150,10 +156,9 @@ class FlutterAccessibilityService {
   static Future<bool> performGlobalAction(GlobalAction action) async {
     try {
       if (action == GlobalAction.unknown) return false;
-      return await _methodChannel.invokeMethod<bool?>(
-            'performGlobalAction',
-            {"action": action.id},
-          ) ??
+      return await _methodChannel.invokeMethod<bool?>('performGlobalAction', {
+            "action": action.id,
+          }) ??
           false;
     } on PlatformException catch (error) {
       log("$error");
