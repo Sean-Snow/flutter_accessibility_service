@@ -211,7 +211,10 @@ public class FlutterAccessibilityServicePlugin implements FlutterPlugin, Activit
         this.mActivity = binding.getActivity();
         binding.addActivityResultListener(this);
         try {
-            FlutterEngineGroup enn = new FlutterEngineGroup(context);
+            FlutterEngineGroup enn = FlutterEngineGroupCache.getInstance().get("main");
+            if (null == enn) {
+                enn = new FlutterEngineGroup(context);
+            }
             FlutterEngineGroupCache.getInstance().put(CACHED_TAG, enn);
 //            DartExecutor.DartEntrypoint dEntry = new DartExecutor.DartEntrypoint(
 //                    FlutterInjector.instance().flutterLoader().findAppBundlePath(),
